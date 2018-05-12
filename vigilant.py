@@ -1,19 +1,13 @@
+import base64
 import io
-import logging
 import time
 
 import zmq
-import base64
 
+import tools
 from picamera import PiCamera
 
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-logger = logging.getLogger('vigilant')
-logger.addHandler(handler)
-logger.setFormatter(formatter)
-
+logger = tools.get_logger()
 
 class Binoculars(object):
 
