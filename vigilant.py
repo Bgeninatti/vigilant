@@ -7,7 +7,9 @@ import base64
 
 from picamera import PiCamera
 
-logger = logging.getLogger('vigilant')
+logger = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger.setFormatter(formatter)
 
 
 class Binoculars(object):
