@@ -2,10 +2,12 @@ import logging
 
 from vigilant import Binoculars, Vigilant
 
-logger = logging.StreamHandler()
+handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger.setFormatter(formatter)
 
+logger = logging.getLogger('turn')
+logger.addHandler(handler)
+logger.setFormatter(formatter)
 
 def start_turn():
     logger.info("Building binoculars")

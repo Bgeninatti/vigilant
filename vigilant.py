@@ -7,8 +7,11 @@ import base64
 
 from picamera import PiCamera
 
-logger = logging.StreamHandler()
+handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger('vigilant')
+logger.addHandler(handler)
 logger.setFormatter(formatter)
 
 
