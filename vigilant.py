@@ -7,7 +7,7 @@ import zmq
 import tools
 from picamera import PiCamera
 
-logger = tools.get_logger()
+logger = tools.get_logger('Vigilant')
 
 class Binoculars(object):
 
