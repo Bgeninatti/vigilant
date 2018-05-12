@@ -3,6 +3,7 @@ import logging
 import time
 
 import zmq
+import base64
 
 from picamera import PiCamera
 
@@ -17,7 +18,8 @@ class Binoculars(object):
     def get_image(self):
         stream = io.BytesIO()
         self._lens.capture(stream, format='bgr')
-        return stream
+        b64_image = base64.b64encode(stream.getvalue())
+        return b64_image
 
 class Vigilant(object):
 
@@ -45,8 +47,8 @@ class Vigilant(object):
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
             image = self.binoculars.get_image()
-            logger.info("Sending %s bytes", len(image.getvalue()))
-            self.publisher.send(image.getvalue())
+            logger.info("Sending %s bytes", len(image))
+            self.publisher.send(image)
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
         self._stop_sockets()
