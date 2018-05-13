@@ -7,11 +7,12 @@ import zmq
 import tools
 from picamera import PiCamera
 
-logger = tools.get_logger('Vigilant')
+logger = tools.get_logger('vigilant')
 
 class Binoculars(object):
 
     def __init__(self):
+        logger.info("Building binoculars")
         self._lens = PiCamera()
 
     def get_image(self):
@@ -23,6 +24,7 @@ class Binoculars(object):
 class Vigilant(object):
 
     def __init__(self, binoculars, address='*:5555', blinking_time=.5):
+        logger.info("Hiring vigilant")
         self.binoculars = binoculars
         self.address = address
         self.blinking_time = blinking_time
@@ -43,6 +45,7 @@ class Vigilant(object):
         self.context.term()
 
     def watch(self):
+        logger.info("Start watching")
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
             image = self.binoculars.get_image()

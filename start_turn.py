@@ -6,13 +6,11 @@ logger = tools.get_logger('turn')
 
 
 def start_turn():
-    logger.info("Building binoculars")
+    logger.info("Starting turn")
     eddys_binoculars = Binoculars()
-    logger.info("Calling Eddy")
     eddy = Vigilant(eddys_binoculars)
 
     try:
-        logger.info("Eddy, watch...")
         eddy.watch()
     except KeyboardInterrupt:
         logger.info("RIIIIIIIIINNGGGG...")
