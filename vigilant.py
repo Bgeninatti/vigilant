@@ -56,14 +56,14 @@ class Vigilant(object):
                  movement_threshold=MOVEMENT_THRESHOLD,
                  sensitivity=SENSITIVITY,
                  address='*:5555',
-                 blinki6g_time=.5):
+                 blinking_time=.5):
         logger.info("Hiring vigilant")
         self.binoculars = binoculars
         self.address = address
         self.blinking_time = blinking_time
-        self.movement_threshold = MOVEMENT_THRESHOLD
+        self.movement_threshold = movement_threshold
         self.sensitivity = sensitivity
-        self.pixels_sensitivity = self._compute_pixel_sensitivity(sensitivity)
+        self.pixels_sensitivity = self.compute_pixel_sensitivity()
         self.context = None
         self.publisher = None
         self.bell_ringing = False
@@ -81,8 +81,8 @@ class Vigilant(object):
         self.publisher.close()
         self.context.term()
 
-    def _compute_pixel_sensitivity(sensitivity):
-        return sensitivity * (self.watch_resolution[0]*self.watch_resolution[1])
+    def compute_pixel_sensitivity(self):
+        return self.sensitivity * (self.binoculars.watch_resolution[0]*self.binoculars.watch_resolution[1])
 
     def are_some_movement(self):
         actual_pixels = self.binoculars.get_green_pixels()
