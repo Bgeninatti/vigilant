@@ -137,6 +137,7 @@ class Vigilant(object):
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
             if self.are_some_movement():
+                logger.info("Something is moving!")
                 self.take_picture()
 
             logger.info("blinking %ss", self.blinking_time)
