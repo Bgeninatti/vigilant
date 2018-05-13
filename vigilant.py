@@ -19,15 +19,12 @@ SAVE_RESOLUTION = (720, 480)
 
 class Binoculars(object):
 
-    def __init__(self, watch_resolution=WATCH_RESOLUTION, save_resolution=SAVE_RESOLUTION):
+    def __init__(self):
         logger.info("Building binoculars")
         self._lens = PiCamera()
         self._lens.rotation = 180
-        self.watch_resolution = watch_resolution
-        self.save_resolution = save_resolution
-        self._lens.resolution = self.watch_resolution
 
-    def _get_image(self):
+    def get_image(self):
         stream = io.BytesIO()
         self._lens.capture(stream, format='jpeg')
         stream.seek(0)
@@ -35,21 +32,19 @@ class Binoculars(object):
         return image
 
     def record_video(self, time=10):
-        self._lens.resolution = self.save_resolution
         filename = datetime.now().strftime("record-%Y%m%d-%H:%M:%S.h264")
-        camera.start_recording(filename)
-        camera.wait_recording(time)
-        camera.stop_recording()
-        self._lens.resolution = self.watch_resolution
+        self._lens.start_recording(filename)
+        self._lens.wait_recording(time)
+        self._lens.stop_recording()
 
-    def get_full_image(self):
-        self._lens.resolution = self.save_resolution
-        image = self._get_image()
-        self._lens.resolution = self.watch_resolution
-        return image
+    def set_resolution(self, resolution):
+        self._lens.resolution = resolution
+
+    def get_resolutio(self):
+        return self._lens.resolution
 
     def get_green_pixels(self):
-        image = self._get_image()
+        image = self.get_image()
         pixels = np.array(image.getdata()).reshape(self.watch_resolution[0],
                                                    self.watch_resolution[1],
                                                    3)
@@ -66,21 +61,30 @@ class Vigilant(object):
                  ip='*',
                  publisher_port=5555,
                  commands_port=5556,
-                 blinking_time=.5):
+                 blinking_time=0,
+                 watch_resolution=WATCH_RESOLUTION,
+                 record_resolution=SAVE_RESOLUTION):
         logger.info("Hiring vigilant")
         self.binoculars = binoculars
+
         self.ip = ip
         self.publisher_port = publisher_port
         self.commands_port = commands_port
-        self.blinking_time = blinking_time
-        self.movement_threshold = movement_threshold
-        self.sensitivity = sensitivity
-        self.pixels_sensitivity = self.compute_pixel_sensitivity()
         self.context = None
         self.publisher = None
         self.commands = None
+
+        self.blinking_time = blinking_time
+
+        self.watch_resolution = watch_resolution
+        self.record_resolution = record_resolution
+        self.movement_threshold = movement_threshold
+        self.sensitivity = sensitivity
+        self.pixels_sensitivity = self.compute_pixel_sensitivity()
+
         self.bell_ringing = False
         self.previous_pixels = None
+
         self._init_sockets()
 
     def _init_sockets(self):
@@ -101,7 +105,7 @@ class Vigilant(object):
         self.context.term()
 
     def compute_pixel_sensitivity(self):
-        return self.sensitivity * (self.binoculars.watch_resolution[0]*self.binoculars.watch_resolution[1])
+        return self.sensitivity * (self.watch_resolution[0]*self.watch_resolution[1])
 
     def are_some_movement(self):
         actual_pixels = self.binoculars.get_green_pixels()
@@ -124,11 +128,14 @@ class Vigilant(object):
 
     def watch(self):
         logger.info("Start watching")
+        self.binoculars.set_resolution(self.watch_resolution)
         self.previous_pixels = self.binoculars.get_green_pixels()
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
             if self.are_some_movement():
-                self.binoculars.record_video()
+                self.binoculars.set_resolution(self.record_resolution)
+                self.take_picture()
+                self.binoculars.set_resolution(self.watch_resolution)
 
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
