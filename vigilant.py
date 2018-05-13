@@ -13,7 +13,7 @@ logger = tools.get_logger('vigilant')
 
 MOVEMENT_THRESHOLD = .10
 WATCH_RESOLUTION = (90, 60)
-SENSITIVITY = .10 * (WATCH_RESOLUTION[0] * WATCH_RESOLUTION[1])
+SENSITIVITY = .30
 SAVE_RESOLUTION = (720, 480)
 
 
@@ -33,6 +33,14 @@ class Binoculars(object):
         stream.seek(0)
         image = Image.open(stream)
         return image
+
+    def record_video(self, time=10):
+        self._lens.resolution = self.save_resolution
+        filename = datetime.now().strftime("record-%Y%m%d-%H:%M:%S.h264")
+        camera.start_recording(filename)
+        camera.wait_recording(time)
+        camera.stop_recording()
+        self._lens.resolution = self.watch_resolution
 
     def get_full_image(self):
         self._lens.resolution = self.save_resolution
@@ -100,7 +108,7 @@ class Vigilant(object):
         pixel_difference = self.previous_pixels - actual_pixels
         changedPixels = sum(sum(pixel_difference > self.movement_threshold * 256))
         self.previous_pixels = actual_pixels
-        return changedPixels
+        return changedPixels > self.sensitivity
 
     def report_movement_state(self):
         movement = self.are_some_movement()
@@ -119,7 +127,8 @@ class Vigilant(object):
         self.previous_pixels = self.binoculars.get_green_pixels()
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
-            self.report_movement_state()
+            if self.are_some_movement():
+                self.binoculars.record_video()
 
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
