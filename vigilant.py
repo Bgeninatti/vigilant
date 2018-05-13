@@ -45,8 +45,8 @@ class Binoculars(object):
 
     def get_green_pixels(self):
         image = self.get_image()
-        pixels = np.array(image.getdata()).reshape(self.watch_resolution[0],
-                                                   self.watch_resolution[1],
+        pixels = np.array(image.getdata()).reshape(self._lens.resolution[0],
+                                                   self._lens.resolution[1],
                                                    3)
         green_pixels = pixels[:, :, 1]
         return green_pixels
@@ -120,11 +120,15 @@ class Vigilant(object):
         self.publisher.send_string('movement\n{0}\n{1}'.format(movement,
                                                                time.time()))
 
-    def take_picture(self):
+    def take_picture(self, full_resolution=True):
+        if full_resolution:
+            self.binoculars.set_resolution(self.record_resolution)
         logger.info("Taking picture")
-        image = self.binoculars.get_full_image()
+        image = self.binoculars.get_image()
         filename = datetime.now().strftime("capture-%Y%m%d-%H:%M:%S.jpg")
         image.save(filename)
+        if full_resolution:
+            self.binoculars.set_resolution(self.watch_resolution)
 
     def watch(self):
         logger.info("Start watching")
@@ -133,9 +137,7 @@ class Vigilant(object):
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
             if self.are_some_movement():
-                self.binoculars.set_resolution(self.record_resolution)
                 self.take_picture()
-                self.binoculars.set_resolution(self.watch_resolution)
 
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
