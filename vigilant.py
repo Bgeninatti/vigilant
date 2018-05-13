@@ -55,30 +55,41 @@ class Vigilant(object):
                  binoculars,
                  movement_threshold=MOVEMENT_THRESHOLD,
                  sensitivity=SENSITIVITY,
-                 address='*:5555',
+                 ip='*',
+                 publisher_port=5555,
+                 commands_port=5556,
                  blinking_time=.5):
         logger.info("Hiring vigilant")
         self.binoculars = binoculars
-        self.address = address
+        self.ip = ip
+        self.publisher_port = publisher_port
+        self.commands_port = commands_port
         self.blinking_time = blinking_time
         self.movement_threshold = movement_threshold
         self.sensitivity = sensitivity
         self.pixels_sensitivity = self.compute_pixel_sensitivity()
         self.context = None
         self.publisher = None
+        self.commands = None
         self.bell_ringing = False
         self.previous_pixels = None
+        self._init_sockets()
 
     def _init_sockets(self):
         self.context = zmq.Context()
         time.sleep(1)
         self.publisher = self.context.socket(zmq.PUB)
-        self.publisher.bind('tcp://{}'.format(self.address))
+        self.publisher.bind('tcp://{0}:{1}'.format(self.ip, self.publisher_port))
+        time.sleep(1)
+        self.commands = self.context.socket(zmq.REP)
+        self.commands.bind('tcp://{0}:{1}'.format(self.ip, self.publisher_port))
         time.sleep(1)
 
     def _stop_sockets(self):
         self.publisher.setsockopt(zmq.LINGER, 0)
         self.publisher.close()
+        self.commands.setsockopt(zmq.LINGER, 0)
+        self.commands.close()
         self.context.term()
 
     def compute_pixel_sensitivity(self):
@@ -89,7 +100,13 @@ class Vigilant(object):
         pixel_difference = self.previous_pixels - actual_pixels
         changedPixels = sum(sum(pixel_difference > self.movement_threshold * 256))
         self.previous_pixels = actual_pixels
-        return changedPixels > self.pixels_sensitivity
+        return changedPixels
+
+    def report_movement_state(self):
+        movement = self.are_some_movement()
+        logger.debug("Reporting movement state")
+        self.publisher.send_string('movement\n{0}\n{1}'.format(movement,
+                                                               time.time()))
 
     def take_picture(self):
         logger.info("Taking picture")
@@ -102,9 +119,8 @@ class Vigilant(object):
         self.previous_pixels = self.binoculars.get_green_pixels()
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
-            if self.are_some_movement():
-                logger.info("Theres movement!")
-                self.take_picture()
+            self.report_movement_state()
+
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
-
+        self._stop_sockets()
