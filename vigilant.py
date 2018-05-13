@@ -40,9 +40,9 @@ class Binoculars(object):
 
     def get_green_pixels(self):
         image = self._get_image()
-        pixels = np.array(image.reshape(WATCH_RESOLUTION[0],
-                                        WATCH_RESOLUTION[1],
-                                        3))
+        pixels = np.array(image.getdata()).reshape(WATCH_RESOLUTION[0],
+                                                   WATCH_RESOLUTION[1],
+                                                   3)
         green_pixels = pixels[:, :, 1]
         return green_pixels
 
@@ -72,7 +72,7 @@ class Vigilant(object):
         self.context.term()
 
     def are_some_movement(self):
-        actual_pixels = self.binoculars.get_quick_view_image()
+        actual_pixels = self.binoculars.get_green_pixels()
         changedPixels = sum(sum((self.previous_pixels - actual_pixels) > MOVEMENT_THRESHOLD))
         self.previous_pixels = actual_pixels
         return changedPixels > SENSITIVITY
@@ -85,7 +85,7 @@ class Vigilant(object):
 
     def watch(self):
         logger.info("Start watching")
-        self.previous_pixels = self.binoculars.get_quick_view_image()
+        self.previous_pixels = self.binoculars.get_green_pixels()
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
             if self.are_some_movement():
