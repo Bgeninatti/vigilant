@@ -86,8 +86,8 @@ class Vigilant(object):
 
     def are_some_movement(self):
         actual_pixels = self.binoculars.get_green_pixels()
-        relative_difference = (self.previous_pixels - actual_pixels)/self.previous_pixels
-        changedPixels = sum(sum(relative_difference > self.movement_threshold))
+        pixel_difference = self.previous_pixels - actual_pixels
+        changedPixels = sum(sum(pixel_difference > self.movement_threshold * 256))
         self.previous_pixels = actual_pixels
         return changedPixels > self.pixels_sensitivity
 
