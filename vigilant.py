@@ -82,7 +82,7 @@ class Vigilant(object):
         self.publisher.bind('tcp://{0}:{1}'.format(self.ip, self.publisher_port))
         time.sleep(1)
         self.commands = self.context.socket(zmq.REP)
-        self.commands.bind('tcp://{0}:{1}'.format(self.ip, self.publisher_port))
+        self.commands.bind('tcp://{0}:{1}'.format(self.ip, self.commands_port))
         time.sleep(1)
 
     def _stop_sockets(self):
