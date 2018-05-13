@@ -11,19 +11,21 @@ from picamera import PiCamera
 
 logger = tools.get_logger('vigilant')
 
-MOVEMENT_THRESHOLD = 10
-SENSITIVITY = 20
-WATCH_RESOLUTION = (360, 240)
+MOVEMENT_THRESHOLD = .10
+WATCH_RESOLUTION = (90, 60)
+SENSITIVITY = .10 * (WATCH_RESOLUTION[0] * WATCH_RESOLUTION[1])
 SAVE_RESOLUTION = (720, 480)
 
 
 class Binoculars(object):
 
-    def __init__(self):
+    def __init__(self, watch_resolution=WATCH_RESOLUTION, save_resolution=SAVE_RESOLUTION):
         logger.info("Building binoculars")
         self._lens = PiCamera()
         self._lens.rotation = 180
-        self._lens.resolution = WATCH_RESOLUTION
+        self.watch_resolution = watch_resolution
+        self.save_resolution = save_resolution
+        self._lens.resolution = self.watch_resolution
 
     def _get_image(self):
         stream = io.BytesIO()
@@ -33,15 +35,15 @@ class Binoculars(object):
         return image
 
     def get_full_image(self):
-        self._lens.resolution = SAVE_RESOLUTION
+        self._lens.resolution = self.save_resolution
         image = self._get_image()
-        self._lens.resolution = WATCH_RESOLUTION
+        self._lens.resolution = self.watch_resolution
         return image
 
     def get_green_pixels(self):
         image = self._get_image()
-        pixels = np.array(image.getdata()).reshape(WATCH_RESOLUTION[0],
-                                                   WATCH_RESOLUTION[1],
+        pixels = np.array(image.getdata()).reshape(self.watch_resolution[0],
+                                                   self.watch_resolution[1],
                                                    3)
         green_pixels = pixels[:, :, 1]
         return green_pixels
@@ -49,11 +51,19 @@ class Binoculars(object):
 
 class Vigilant(object):
 
-    def __init__(self, binoculars, address='*:5555', blinking_time=.5):
+    def __init__(self,
+                 binoculars,
+                 movement_threshold=MOVEMENT_THRESHOLD,
+                 sensitivity=SENSITIVITY,
+                 address='*:5555',
+                 blinki6g_time=.5):
         logger.info("Hiring vigilant")
         self.binoculars = binoculars
         self.address = address
         self.blinking_time = blinking_time
+        self.movement_threshold = MOVEMENT_THRESHOLD
+        self.sensitivity = sensitivity
+        self.pixels_sensitivity = self._compute_pixel_sensitivity(sensitivity)
         self.context = None
         self.publisher = None
         self.bell_ringing = False
@@ -71,11 +81,15 @@ class Vigilant(object):
         self.publisher.close()
         self.context.term()
 
+    def _compute_pixel_sensitivity(sensitivity):
+        return sensitivity * (self.watch_resolution[0]*self.watch_resolution[1])
+
     def are_some_movement(self):
         actual_pixels = self.binoculars.get_green_pixels()
-        changedPixels = sum(sum((self.previous_pixels - actual_pixels) > MOVEMENT_THRESHOLD))
+        relative_difference = (self.previous_pixels - actual_pixels)/self.previous_pixels
+        changedPixels = sum(sum(relative_difference > self.movement_threshold))
         self.previous_pixels = actual_pixels
-        return changedPixels > SENSITIVITY
+        return changedPixels > self.pixels_sensitivity
 
     def take_picture(self):
         logger.info("Taking picture")
