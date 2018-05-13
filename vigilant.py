@@ -1,7 +1,8 @@
-import datetime
 import io
 import time
+from datetime import datetime
 
+import numpy as np
 import zmq
 from PIL import Image
 
@@ -12,20 +13,39 @@ logger = tools.get_logger('vigilant')
 
 MOVEMENT_THRESHOLD = 10
 SENSITIVITY = 20
+WATCH_RESOLUTION = (360, 240)
+SAVE_RESOLUTION = (720, 480)
+
 
 class Binoculars(object):
 
     def __init__(self):
         logger.info("Building binoculars")
         self._lens = PiCamera()
+        self._lens.rotation = 180
+        self._lens.resolution = WATCH_RESOLUTION
 
-    def get_image(self):
+    def _get_image(self):
         stream = io.BytesIO()
-        self._lens.capture(stream, format='bgr')
+        self._lens.capture(stream, format='jpeg')
         stream.seek(0)
         image = Image.open(stream)
-        buffer = image.load()
-        return image, buffer
+        return image
+
+    def get_full_image(self):
+        self._lens.resolution = SAVE_RESOLUTION
+        image = self._get_image()
+        self._lens.resolution = WATCH_RESOLUTION
+        return image
+
+    def get_green_pixels(self):
+        image = self._get_image()
+        pixels = np.array(image.reshape(WATCH_RESOLUTION[0],
+                                        WATCH_RESOLUTION[1],
+                                        3))
+        green_pixels = pixels[:, :, 1]
+        return green_pixels
+
 
 class Vigilant(object):
 
@@ -37,8 +57,7 @@ class Vigilant(object):
         self.context = None
         self.publisher = None
         self.bell_ringing = False
-        self.previous_frame = None
-        self.previous_buffer = None
+        self.previous_pixels = None
 
     def _init_sockets(self):
         self.context = zmq.Context()
@@ -52,41 +71,26 @@ class Vigilant(object):
         self.publisher.close()
         self.context.term()
 
-    def are_some_movement(self, new_buffer):
-        changedPixels = 0
-        for x in range(0, 100):
-            for y in range(0, 75):
-                # Just check green channel as it's the highest quality channel
-                pixdiff = abs(self.previous_buffer[x, y][1] - new_buffer[x, y][1])
-                if pixdiff > MOVEMENT_THRESHOLD:
-                    changedPixels += 1
+    def are_some_movement(self):
+        actual_pixels = self.binoculars.get_quick_view_image()
+        changedPixels = sum(sum((self.previous_pixels - actual_pixels) > MOVEMENT_THRESHOLD))
+        self.previous_pixels = actual_pixels
         return changedPixels > SENSITIVITY
 
-    def take_picture(self, image):
+    def take_picture(self):
         logger.info("Taking picture")
-        time = datetime.now()
-        filename = "capture-%04d%02d%02d-%02d%02d%02d.jpg" % (time.year,
-                                                              time.month,
-                                                              time.day,
-                                                              time.hour,
-                                                              time.minute,
-                                                              time.second)
+        image = self.binoculars.get_full_image()
+        filename = datetime.now().strftime("capture-%Y%m%d-%H:%M:%S.jpg")
         image.save(filename)
 
     def watch(self):
         logger.info("Start watching")
-        self._previous_frame, self.previous_buffer = self.binoculars.get_image()
+        self.previous_pixels = self.binoculars.get_quick_view_image()
         while not self.bell_ringing:
             logger.info("Seeing in the binoculars.")
-            new_frame, new_buffer = self.binoculars.get_image()
-            there_is_movement = self.are_some_movement(new_buffer)
-            if there_is_movement:
+            if self.are_some_movement():
                 logger.info("Theres movement!")
-                self.take_picture(new_frame)
-            self.previous_frame = new_frame
-            self.previous_buffer = new_buffer
-
+                self.take_picture()
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
-        self._stop_sockets()
 
