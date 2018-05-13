@@ -1,4 +1,5 @@
 import io
+import os
 import time
 from datetime import datetime
 
@@ -15,7 +16,7 @@ MOVEMENT_THRESHOLD = .10
 WATCH_RESOLUTION = (90, 60)
 SENSITIVITY = .30
 SAVE_RESOLUTION = (720, 480)
-
+SAVE_FOLDER = '/home/pi/mnt'
 
 class Binoculars(object):
 
@@ -33,7 +34,7 @@ class Binoculars(object):
 
     def record_video(self, time=10):
         filename = datetime.now().strftime("record-%Y%m%d-%H:%M:%S.h264")
-        self._lens.start_recording(filename)
+        self._lens.start_recording(os.path.join(SAVE_FOLDER, filename))
         self._lens.wait_recording(time)
         self._lens.stop_recording()
 
@@ -126,7 +127,7 @@ class Vigilant(object):
         logger.info("Taking picture")
         image = self.binoculars.get_image()
         filename = datetime.now().strftime("capture-%Y%m%d-%H:%M:%S.jpg")
-        image.save(filename)
+        image.save(os.path.join(SAVE_FOLDER, filename))
         if full_resolution:
             self.binoculars.set_resolution(self.watch_resolution)
 
@@ -138,8 +139,7 @@ class Vigilant(object):
             logger.info("Seeing in the binoculars.")
             if self.are_some_movement():
                 logger.info("Something is moving!")
-                self.take_picture()
-
+                self.binoculars.take_picture()
             logger.info("blinking %ss", self.blinking_time)
             time.sleep(self.blinking_time)
         self._stop_sockets()

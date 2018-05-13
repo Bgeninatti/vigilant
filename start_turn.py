@@ -2,7 +2,7 @@
 import tools
 from vigilant import Binoculars, Vigilant
 
-logger = tools.get_logger('turn')
+logger = tools.get_logger('vigilant')
 
 def call_eddy():
     eddys_binoculars = Binoculars()
