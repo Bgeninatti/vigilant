@@ -1,8 +1,7 @@
 import logging
+import logging.config
 
-
-def get_logger(name):
-    log_file = '/home/pi/log/vigilant.log'
+def get_logger(name, log_file='/home/pi/log/vigilant.log'):
     ERROR_FORMAT = "%(levelname)s at %(asctime)s in %(funcName)s in %(filename) at line %(lineno)d: %(message)s"
     DEBUG_FORMAT = "%(lineno)d in %(filename)s at %(asctime)s: %(message)s"
     LOG_CONFIG = {'version': 1,
