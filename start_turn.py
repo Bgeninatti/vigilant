@@ -1,18 +1,13 @@
 
 import tools
-from vigilant import Binoculars, Vigilant
+from vigilant import Vigilant
 
 logger = tools.get_logger('vigilant')
 
-def call_eddy():
-    eddys_binoculars = Binoculars()
-    eddy = Vigilant(eddys_binoculars)
-    return eddy
 
 def start_turn():
     logger.info("Starting turn")
-    eddy = call_eddy()
-
+    eddy = Vigilant()
     try:
         eddy.watch()
     except KeyboardInterrupt:

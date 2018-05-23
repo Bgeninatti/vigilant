@@ -2,28 +2,89 @@ import io
 import os
 import time
 from datetime import datetime
+from threading import Event
 
 import numpy as np
 import zmq
 from PIL import Image
 
 import tools
-from picamera import PiCamera
+from picamera import PiCamera, PiCameraCirularIO, array
 
 logger = tools.get_logger('vigilant')
 
-MOVEMENT_THRESHOLD = .10
-WATCH_RESOLUTION = (90, 60)
-SENSITIVITY = .30
-SAVE_RESOLUTION = (720, 480)
+RECORD_RESOLUTION = (1920, 1080)
+MOTION_RESOLUTION = (640, 480)
 SAVE_FOLDER = '/home/pi/mnt'
+
+CV_THRESHOLD = .9
+PRESECONDS = 3
+ANALYSE_PERIOD = .5
+
+class Watcher(array.PiMotionAnalysis):
+
+    def  __init__(self, camera, motion_event):
+        super()__init__(camera)
+        self.are_some_movement = motion_event
+        self.kernel = None
+        self._kernel_square = 0
+        self.next_analyse_on = time.time() + ANALYSE_PERIOD
+
+    def compute_convolution(self, imagen):
+        numerador = sum(sum(imagen * self.kernel))
+        pre_denom = sum(sum(self.kernel * self.kernel))
+        cv = numerador / np.sqrt(numerador * pre_denom)
+        return cv
+
+    def update_kernel(self, frame):
+        self.kernel = frame
+        self._kernel_square = sum(sum(frame * frame))
+
+    def analyse(self, frame):
+        if not self.kernel:
+            self.update_kernel(frame)
+        else:
+            if time.time() > self.next_analyse_on:
+                cv= self.compute_convolution(frame)
+                if cv > CV_THRESHOLD:
+                    self.are_some_movement.set()
+                else:
+                    self.are_some_movement.clear()
+                self.update_kernel(frame)
+                self.next_analyse_on = time.time() + ANALYSE_PERIOD
+
 
 class Binoculars(object):
 
-    def __init__(self):
+    def __init__(self, are_some_movement):
         logger.info("Building binoculars")
         self._lens = PiCamera()
         self._lens.rotation = 180
+        self.set_resolution(RESOLUTION)
+        self.buffer = PiCameraCirularIO(self._lens, seconds=PRESECONDS)
+        self.watcher = Watcher(self._lens, are_some_movement)
+
+    def start_watching(self):
+        self._lens.start_recording(self.buffer,
+                                   format='h264',
+                                   resolution=RECORD_RESOLUTION,
+                                   splitter_port=1)
+        self._lens.start_recording('/dev/null',
+                                   format='h264',
+                                   resolution=MOTION_RESOLUTION,
+                                   splitter_port=2,
+                                   motion_output=self.watcher)
+
+    def start_recording(self, filename):
+        self.is_recording = True
+        self._lens.split_recording(filename, splitter_port=1)
+
+    def stop_recording(self):
+        self.is_recording = False
+        self._lens.split_recording(self.buffer, splitter_port=1)
+
+    def save_buffer(self, filename):
+        self.buffer.copy_to(filename)
 
     def get_image(self):
         stream = io.BytesIO()
@@ -37,109 +98,41 @@ class Binoculars(object):
         self._lens.start_recording(os.path.join(SAVE_FOLDER, filename))
         self._lens.wait_recording(time)
         self._lens.stop_recording()
-
-    def set_resolution(self, resolution):
-        self._lens.resolution = resolution
-
-    def get_resolutio(self):
-        return self._lens.resolution
-
-    def get_green_pixels(self):
-        image = self.get_image()
-        pixels = np.array(image.getdata()).reshape(self._lens.resolution[0],
-                                                   self._lens.resolution[1],
-                                                   3)
-        green_pixels = pixels[:, :, 1]
-        return green_pixels
+        )
+    def take_picture(self):
+        logger.info("Taking picture")
+        i.get_image()
+        filename = datetime.now().strftime("capture-%Y%m%d-%H:%M:%S.jpg")
+        image.save(os.path.join(SAVE_FOLDER, filename))
 
 
 class Vigilant(object):
 
-    def __init__(self,
-                 binoculars,
-                 movement_threshold=MOVEMENT_THRESHOLD,
-                 sensitivity=SENSITIVITY,
-                 ip='*',
-                 publisher_port=5555,
-                 commands_port=5556,
-                 blinking_time=0,
-                 watch_resolution=WATCH_RESOLUTION,
-                 record_resolution=SAVE_RESOLUTION):
+    def __init__(self):
         logger.info("Hiring vigilant")
-        self.binoculars = binoculars
-
-        self.ip = ip
-        self.publisher_port = publisher_port
-        self.commands_port = commands_port
-        self.context = None
-        self.publisher = None
-        self.commands = None
-
-        self.blinking_time = blinking_time
-
-        self.watch_resolution = watch_resolution
-        self.record_resolution = record_resolution
-        self.movement_threshold = movement_threshold
-        self.sensitivity = sensitivity
-        self.pixels_sensitivity = self.compute_pixel_sensitivity()
-
+        self.are_some_movement = Event()
+        self.binoculars = Binoculars(self.are_some_movement)
         self.bell_ringing = False
-        self.previous_pixels = None
 
-        self._init_sockets()
+    def get_or_create_folder(self):
+        folder = datetime.now().strftime("%Y%m%d")
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        return folder
 
-    def _init_sockets(self):
-        self.context = zmq.Context()
-        time.sleep(1)
-        self.publisher = self.context.socket(zmq.PUB)
-        self.publisher.bind('tcp://{0}:{1}'.format(self.ip, self.publisher_port))
-        time.sleep(1)
-        self.commands = self.context.socket(zmq.REP)
-        self.commands.bind('tcp://{0}:{1}'.format(self.ip, self.commands_port))
-        time.sleep(1)
-
-    def _stop_sockets(self):
-        self.publisher.setsockopt(zmq.LINGER, 0)
-        self.publisher.close()
-        self.commands.setsockopt(zmq.LINGER, 0)
-        self.commands.close()
-        self.context.term()
-
-    def compute_pixel_sensitivity(self):
-        return self.sensitivity * (self.watch_resolution[0]*self.watch_resolution[1])
-
-    def are_some_movement(self):
-        actual_pixels = self.binoculars.get_green_pixels()
-        pixel_difference = self.previous_pixels - actual_pixels
-        changedPixels = sum(sum(pixel_difference > self.movement_threshold * 256))
-        self.previous_pixels = actual_pixels
-        return changedPixels > self.sensitivity
-
-    def report_movement_state(self):
-        movement = self.are_some_movement()
-        logger.debug("Reporting movement state")
-        self.publisher.send_string('movement\n{0}\n{1}'.format(movement,
-                                                               time.time()))
-
-    def take_picture(self, full_resolution=True):
-        if full_resolution:
-            self.binoculars.set_resolution(self.record_resolution)
-        logger.info("Taking picture")
-        image = self.binoculars.get_image()
-        filename = datetime.now().strftime("capture-%Y%m%d-%H:%M:%S.jpg")
-        image.save(os.path.join(SAVE_FOLDER, filename))
-        if full_resolution:
-            self.binoculars.set_resolution(self.watch_resolution)
+    def get_event_filename(self)
+        folder = self.get_or_create_folder()
+        events_number = len(os.listdir(folder))
+        filename = datetime.now().strftime("event-{}-%Y%m%d").format(events_number +  1)
+        filename_with_path = os.path.join(folder, filename)
+        return filename_with_path
 
     def watch(self):
         logger.info("Start watching")
-        self.binoculars.set_resolution(self.watch_resolution)
-        self.previous_pixels = self.binoculars.get_green_pixels()
         while not self.bell_ringing:
-            logger.info("Seeing in the binoculars.")
-            if self.are_some_movement():
+            if self.are_some_movement.is_set() and not self.binoculars.is_recording:
                 logger.info("Something is moving!")
-                self.binoculars.take_picture()
-            logger.info("blinking %ss", self.blinking_time)
-            time.sleep(self.blinking_time)
-        self._stop_sockets()
+                filename = self.get_event_filename()
+                self.binoculars.start_recording(filename)
+            elif not self.are_some_movement.is_set() and self.binoculars.is_recording:
+                self.binoculars.stop_recording()
