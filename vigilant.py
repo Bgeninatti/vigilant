@@ -9,7 +9,7 @@ import zmq
 from PIL import Image
 
 import tools
-from picamera import PiCamera, PiCameraCirularIO, array
+from picamera import PiCamera, PiCameraCircularIO, array
 
 logger = tools.get_logger('vigilant')
 
@@ -21,10 +21,11 @@ CV_THRESHOLD = .9
 PRESECONDS = 3
 ANALYSE_PERIOD = .5
 
+
 class Watcher(array.PiMotionAnalysis):
 
     def  __init__(self, camera, motion_event):
-        super()__init__(camera)
+        super().__init__(camera)
         self.are_some_movement = motion_event
         self.kernel = None
         self._kernel_square = 0
@@ -40,18 +41,22 @@ class Watcher(array.PiMotionAnalysis):
         self.kernel = frame
         self._kernel_square = sum(sum(frame * frame))
 
-    def analyse(self, frame):
-        if not self.kernel:
-            self.update_kernel(frame)
-        else:
-            if time.time() > self.next_analyse_on:
-                cv= self.compute_convolution(frame)
-                if cv > CV_THRESHOLD:
-                    self.are_some_movement.set()
-                else:
-                    self.are_some_movement.clear()
-                self.update_kernel(frame)
-                self.next_analyse_on = time.time() + ANALYSE_PERIOD
+    def analyze(self, frame):
+        print(type(frame))
+        print(frame['x'])
+        print(frame['y']) 
+        #if not self.kernel:
+        #    self.update_kernel(frame)
+        #else:
+        #    if time.time() > self.next_analyse_on:
+        #        cv= self.compute_convolution(frame)
+        #        print(cv)
+        #        if cv > CV_THRESHOLD:
+        #            self.are_some_movement.set()
+        #        else:
+        #            self.are_some_movement.clear()
+        #        self.update_kernel(frame)
+        #        self.next_analyse_on = time.time() + ANALYSE_PERIOD
 
 
 class Binoculars(object):
@@ -60,18 +65,18 @@ class Binoculars(object):
         logger.info("Building binoculars")
         self._lens = PiCamera()
         self._lens.rotation = 180
-        self.set_resolution(RESOLUTION)
-        self.buffer = PiCameraCirularIO(self._lens, seconds=PRESECONDS)
+        self.buffer = PiCameraCircularIO(self._lens, seconds=PRESECONDS)
         self.watcher = Watcher(self._lens, are_some_movement)
+        self.is_recording = False
 
     def start_watching(self):
         self._lens.start_recording(self.buffer,
                                    format='h264',
-                                   resolution=RECORD_RESOLUTION,
+                                   resize=RECORD_RESOLUTION,
                                    splitter_port=1)
         self._lens.start_recording('/dev/null',
                                    format='h264',
-                                   resolution=MOTION_RESOLUTION,
+                                   resize=MOTION_RESOLUTION,
                                    splitter_port=2,
                                    motion_output=self.watcher)
 
@@ -98,7 +103,7 @@ class Binoculars(object):
         self._lens.start_recording(os.path.join(SAVE_FOLDER, filename))
         self._lens.wait_recording(time)
         self._lens.stop_recording()
-        )
+
     def take_picture(self):
         logger.info("Taking picture")
         i.get_image()
@@ -120,7 +125,7 @@ class Vigilant(object):
             os.makedirs(folder)
         return folder
 
-    def get_event_filename(self)
+    def get_event_filename(self):
         folder = self.get_or_create_folder()
         events_number = len(os.listdir(folder))
         filename = datetime.now().strftime("event-{}-%Y%m%d").format(events_number +  1)
@@ -129,6 +134,7 @@ class Vigilant(object):
 
     def watch(self):
         logger.info("Start watching")
+        self.binoculars.start_watching()
         while not self.bell_ringing:
             if self.are_some_movement.is_set() and not self.binoculars.is_recording:
                 logger.info("Something is moving!")
