@@ -20,7 +20,8 @@ SAVE_FOLDER = '/home/pi/mnt'
 CV_THRESHOLD = .9
 PRESECONDS = 3
 ANALYSE_PERIOD = .5
-
+MACROBLOCK_THRESHOLD = 60
+MACROBLOCK_COUNT_FOR_MOTON = 10
 
 class Watcher(array.PiMotionAnalysis):
 
@@ -41,22 +42,17 @@ class Watcher(array.PiMotionAnalysis):
         self.kernel = frame
         self._kernel_square = sum(sum(frame * frame))
 
-    def analyze(self, frame):
-        print(type(frame))
-        print(frame['x'])
-        print(frame['y']) 
-        #if not self.kernel:
-        #    self.update_kernel(frame)
-        #else:
-        #    if time.time() > self.next_analyse_on:
-        #        cv= self.compute_convolution(frame)
-        #        print(cv)
-        #        if cv > CV_THRESHOLD:
-        #            self.are_some_movement.set()
-        #        else:
-        #            self.are_some_movement.clear()
-        #        self.update_kernel(frame)
-        #        self.next_analyse_on = time.time() + ANALYSE_PERIOD
+    def analyze(self, macroblock):
+        if time.time() > self.next_analyse_on:
+            a = np.sqrt(
+                np.square(macroblock['x'].astype(np.float)) +
+                np.square(macroblock['y'].astype(np.float))
+                ).clip(0, 255).astype(np.uint8)
+            if (a > MACROBLOCK_THRESHOLD).sum() > MACROBLOCK_COUNT_FOR_MOTON:
+                self.are_some_movement.set()
+            else:
+                self.are_some_movement.clear()
+            self.next_analyse_on = time.time() + ANALYSE_PERIOD
 
 
 class Binoculars(object):
