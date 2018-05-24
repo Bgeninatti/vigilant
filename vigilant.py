@@ -44,16 +44,18 @@ class Watcher(array.PiMotionAnalysis):
 
     def analyze(self, macroblock):
         if time.time() > self.next_analyse_on:
-            a = np.sqrt(
-                np.square(macroblock['x'].astype(np.float)) +
-                np.square(macroblock['y'].astype(np.float))
-                ).clip(0, 255).astype(np.uint8)
-            if (a > MACROBLOCK_THRESHOLD).sum() > MACROBLOCK_COUNT_FOR_MOTON:
-                self.are_some_movement.set()
-            else:
-                self.are_some_movement.clear()
-            self.next_analyse_on = time.time() + ANALYSE_PERIOD
-
+            try:
+                a = np.sqrt(
+                    np.square(macroblock['x'].astype(np.float)) +
+                    np.square(macroblock['y'].astype(np.float))
+                    ).clip(0, 255).astype(np.uint8)
+                if (a > MACROBLOCK_THRESHOLD).sum() > MACROBLOCK_COUNT_FOR_MOTON:
+                    self.are_some_movement.set()
+                else:
+                    self.are_some_movement.clear()
+                self.next_analyse_on = time.time() + ANALYSE_PERIOD
+            except Exception as error:
+                print(error)
 
 class Binoculars(object):
 
