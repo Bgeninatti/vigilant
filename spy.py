@@ -14,13 +14,17 @@ class Spy(object):
 
     def __init__(self):
         self.camera = PiCamera()
-        self.resolution = RESOLUTION
+        self.camera.resolution = RESOLUTION
+        self.camera.rotation = 180
         self.spy_until = 0
 
     def spying(self):
+        print("Start spying...")
         self.spy_until = time.time() + SPY_PERIOD
+        print("Spy for {} seconds".format(int(self.spy_until - time.time())))
         while time.time() < self.spy_until:
             filename = self._get_filename()
+            print("Taking photo {}".format(filename))
             self.camera.capture(filename, format=PHOTO_FORMAT)
             time.sleep(PHOTO_INTERVAL)
 
